@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Forensics & Incident Log Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #090d16; color: #e2e8f0; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass { background: rgba(17, 24, 39, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.15); }
+        .glow-cyan { box-shadow: 0 0 20px rgba(6, 182, 212, 0.12); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- TOP NAVBAR -->
+    <header class="glass sticky top-0 z-50 border-b border-slate-800 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-3">
+                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 mono">MYSQL 8.0 + FASTAPI</span>
+                    <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white">Cyber Forensics & Incident Log Management System</h1>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">
+                    B.Tech DBMS Mini-Project | Triggers, Stored Procedures, B-Tree Indexing & RBAC &bull;
+                    <span class="text-cyan-400 font-semibold">Manik Dewan | J250210085 | 2nd Year</span>
+                </p>
+            </div>
+
+            <!-- LIVE RBAC SWITCHER -->
+            <div class="flex items-center gap-3 bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-700">
+                <span class="text-xs text-slate-400 uppercase font-semibold">DB Session Role:</span>
+                <select id="rbacRole" class="bg-slate-800 text-cyan-300 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-600 focus:outline-none">
+                    <option value="root">root (Admin - Full Access)</option>
+                    <option value="analyst_user">analyst_user (L1 RBAC Restricted)</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 hidden max-w-md px-5 py-3.5 rounded-xl shadow-2xl border text-sm font-medium transition-all"></div>
+
+    <!-- MAIN CONTAINER -->
+    <main class="max-w-7xl w-full mx-auto px-6 py-6 space-y-6 flex-1">
+
+        <!-- KPI CARDS -->
+        <section class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="glass glow-cyan rounded-2xl p-4">
+                <p class="text-xs text-slate-400 uppercase">Total Incidents</p>
+                <p id="kpiTotalInc" class="text-3xl font-bold text-white mt-1">-</p>
+            </div>
+            <div class="glass rounded-2xl p-4 border-rose-500/20">
+                <p class="text-xs text-rose-400 uppercase">Active Cases</p>
+                <p id="kpiActiveInc" class="text-3xl font-bold text-rose-400 mt-1">-</p>
+            </div>
+            <div class="glass rounded-2xl p-4">
+                <p class="text-xs text-slate-400 uppercase">Compromised Hosts</p>
+                <p id="kpiHosts" class="text-3xl font-bold text-amber-400 mt-1">-</p>
+            </div>
+            <div class="glass rounded-2xl p-4">
+                <p class="text-xs text-slate-400 uppercase">Forensic Logs</p>
+                <p id="kpiLogs" class="text-3xl font-bold text-cyan-400 mt-1">-</p>
+            </div>
+            <div class="glass rounded-2xl p-4 border-emerald-500/20">
+                <p class="text-xs text-emerald-400 uppercase">Trigger Audits</p>
+                <p id="kpiAudits" class="text-3xl font-bold text-emerald-400 mt-1">-</p>
+            </div>
+        </section>
+
+        <!-- NAVIGATION TABS -->
+        <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+            <button onclick="switchTab('timeline')" id="btn-timeline" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold bg-cyan-500 text-slate-950">1. Attack Timeline & Visuals</button>
+            <button onclick="switchTab('ingest')" id="btn-ingest" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700">2. Ingest Logs & Trigger Audit</button>
+            <button onclick="switchTab('security')" id="btn-security" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700">3. Immutability & Stored Procedure</button>
+            <button onclick="switchTab('analytics')" id="btn-analytics" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700">4. Analytics & EXPLAIN Index</button>
+        </div>
+
+        <!-- TAB 1: TIMELINE & CHARTS -->
+        <section id="tab-timeline" class="tab-content space-y-6">
+            <div class="glass rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Chronological Attack Timeline Reconstruction</h2>
+                    <p class="text-xs text-slate-400">Multi-table SQL JOIN across <span class="mono text-cyan-400">incidents</span>, <span class="mono text-cyan-400">compromised_hosts</span>, and <span class="mono text-cyan-400">forensic_logs</span></p>
+                </div>
+                <select id="incidentSelect" onchange="loadDashboard()" class="bg-slate-900 border border-slate-700 text-sm text-white rounded-xl px-4 py-2.5 focus:outline-none focus:border-cyan-400"></select>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="glass rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-slate-300 mb-3">Attack Vector Distribution</h3>
+                    <canvas id="eventChart" height="140"></canvas>
+                </div>
+                <div class="glass rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-slate-300 mb-3">Investigator Case Workload</h3>
+                    <canvas id="workloadChart" height="140"></canvas>
+                </div>
+            </div>
+
+            <div class="glass rounded-2xl overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-900/90 text-slate-400 uppercase border-b border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">ID</th>
+                                <th class="px-4 py-3">Timestamp</th>
+                                <th class="px-4 py-3">Host</th>
+                                <th class="px-4 py-3">Event Type</th>
+                                <th class="px-4 py-3">Attacker IP</th>
+                                <th class="px-4 py-3">Raw Evidence Payload</th>
+                                <th class="px-4 py-3">SHA-256</th>
+                            </tr>
+                        </thead>
+                        <tbody id="timelineBody" class="divide-y divide-slate-800/70"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: INGEST & AUDIT -->
+        <section id="tab-ingest" class="tab-content hidden grid md:grid-cols-2 gap-6">
+            <div class="glass rounded-2xl p-6 space-y-4">
+                <h2 class="text-lg font-semibold text-white">Ingest New Forensic Log</h2>
+                <p class="text-xs text-slate-400">Computes SHA-256 hash and executes parameterized INSERT. Fires <span class="mono text-emerald-400">trg_after_log_insert</span> automatically.</p>
+                
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Target Compromised Host</label>
+                    <select id="hostSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Event Type</label>
+                        <select id="eventType" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                            <option>FAILED_SSH_LOGIN</option>
+                            <option>MALWARE_DROP</option>
+                            <option>PRIVILEGE_ESCALATION</option>
+                            <option>OUTBOUND_C2_BEACON</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Source / Attacker IP</label>
+                        <input id="sourceIp" type="text" value="185.220.101.99" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mono">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Raw Log Payload</label>
+                    <textarea id="rawPayload" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mono">Unauthorized sudo execution attempt by user www-data</textarea>
+                </div>
+                <button onclick="ingestLog()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-2.5 rounded-xl transition">Insert Forensic Evidence</button>
+            </div>
+
+            <div class="glass rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Live Chain-of-Custody Audit (<span class="mono text-emerald-400">custody_audit</span>)</h2>
+                <p class="text-xs text-slate-400 mb-4">Written exclusively by MySQL <span class="mono">AFTER INSERT</span> trigger.</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-900/90 text-slate-400 uppercase border-b border-slate-800">
+                            <tr>
+                                <th class="px-3 py-2">Audit ID</th>
+                                <th class="px-3 py-2">Log ID</th>
+                                <th class="px-3 py-2">Action</th>
+                                <th class="px-3 py-2">DB User</th>
+                                <th class="px-3 py-2">Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditBody" class="divide-y divide-slate-800/70"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: IMMUTABILITY & STORED PROCEDURE -->
+        <section id="tab-security" class="tab-content hidden grid md:grid-cols-2 gap-6">
+            <div class="glass rounded-2xl p-6 space-y-4 border-rose-500/20">
+                <span class="px-2.5 py-1 text-xs rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 mono">BEFORE UPDATE TRIGGER</span>
+                <h2 class="text-lg font-semibold text-white">Test Evidence Immutability</h2>
+                <p class="text-xs text-slate-400">Attempt to tamper with a stored forensic log. MySQL trigger <span class="mono text-rose-400">trg_prevent_log_tamper</span> blocks the transaction with SQLSTATE 45000.</p>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Log ID to Alter</label>
+                    <input id="tamperLogId" type="number" value="1" min="1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Forged Payload</label>
+                    <input id="fakePayload" type="text" value="Authorized admin maintenance login" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                </div>
+                <button onclick="testTamper()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-semibold py-2.5 rounded-xl transition">Attempt Unauthorized Update</button>
+            </div>
+
+            <div class="glass rounded-2xl p-6 space-y-4 border-emerald-500/20">
+                <span class="px-2.5 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mono">ACID STORED PROCEDURE</span>
+                <h2 class="text-lg font-semibold text-white">Execute <span class="mono">sp_close_incident</span></h2>
+                <p class="text-xs text-slate-400">Verifies forensic evidence exists inside a transaction before closing an incident. Try switching to <span class="mono text-amber-400">analyst_user</span> in the top-right to test RBAC denial.</p>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Incident ID to Close</label>
+                    <input id="closeIncId" type="number" value="1" min="1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                </div>
+                <button onclick="closeIncident()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold py-2.5 rounded-xl transition">Call Stored Procedure</button>
+            </div>
+        </section>
+
+        <!-- TAB 4: ANALYTICS & EXPLAIN -->
+        <section id="tab-analytics" class="tab-content hidden space-y-6">
+            <div class="glass rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white mb-1">Query Optimization Proof (<span class="mono text-cyan-400">EXPLAIN</span> Composite B-Tree Index)</h2>
+                <p class="text-xs text-slate-400 mb-4">Demonstrates range scan using composite index <span class="mono text-emerald-400">idx_logs_host_time (host_id, event_timestamp)</span> instead of full table scan.</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs mono">
+                        <thead class="bg-slate-900 text-slate-400 uppercase border-b border-slate-800">
+                            <tr>
+                                <th class="px-3 py-2">Table</th>
+                                <th class="px-3 py-2">Type</th>
+                                <th class="px-3 py-2">Possible Keys</th>
+                                <th class="px-3 py-2">Key Used</th>
+                                <th class="px-3 py-2">Rows</th>
+                                <th class="px-3 py-2">Extra</th>
+                            </tr>
+                        </thead>
+                        <tbody id="explainBody" class="divide-y divide-slate-800"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        let eventChartInstance = null;
+        let workloadChartInstance = null;
+        let initialLoad = true;
+
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `fixed bottom-5 right-5 z-50 max-w-md px-5 py-3.5 rounded-xl shadow-2xl border text-sm font-medium ${
+                isError ? 'bg-rose-950/95 border-rose-500 text-rose-200' : 'bg-emerald-950/95 border-emerald-500 text-emerald-200'
+            }`;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 5000);
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = 'tab-btn px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700';
+            });
+            document.getElementById(`tab-${name}`).classList.remove('hidden');
+            document.getElementById(`btn-${name}`).className = 'tab-btn px-4 py-2 rounded-xl text-sm font-semibold bg-cyan-500 text-slate-950';
+        }
+
+        async function loadDashboard() {
+            const incId = document.getElementById('incidentSelect').value || 1;
+            const res = await fetch(`/api/dashboard?incident_id=${incId}`);
+            const data = await res.json();
+
+            // KPIs
+            document.getElementById('kpiTotalInc').textContent = data.stats.total_incidents;
+            document.getElementById('kpiActiveInc').textContent = data.stats.active_incidents;
+            document.getElementById('kpiHosts').textContent = data.stats.total_hosts;
+            document.getElementById('kpiLogs').textContent = data.stats.total_logs;
+            document.getElementById('kpiAudits').textContent = data.stats.audit_entries;
+
+            // Populate dropdowns once
+            if (initialLoad) {
+                const incSel = document.getElementById('incidentSelect');
+                incSel.innerHTML = data.incidents.map(i => `<option value="${i.incident_id}">#${i.incident_id} - ${i.title} [${i.severity} | ${i.status}]</option>`).join('');
+                const hostSel = document.getElementById('hostSelect');
+                hostSel.innerHTML = data.hosts.map(h => `<option value="${h.host_id}">${h.hostname} (${h.ip_address}) - Incident #${h.incident_id}</option>`).join('');
+                initialLoad = false;
+            } else {
+                const incSel = document.getElementById('incidentSelect');
+                const currentVal = incSel.value;
+                incSel.innerHTML = data.incidents.map(i => `<option value="${i.incident_id}">#${i.incident_id} - ${i.title} [${i.severity} | ${i.status}]</option>`).join('');
+                incSel.value = currentVal;
+            }
+
+            // Timeline Table
+            document.getElementById('timelineBody').innerHTML = data.timeline.map(r => `
+                <tr class="hover:bg-slate-800/40">
+                    <td class="px-4 py-3 mono text-slate-400">#${r.log_id}</td>
+                    <td class="px-4 py-3 mono text-cyan-300">${r.event_timestamp.slice(0, 23)}</td>
+                    <td class="px-4 py-3 font-semibold text-white">${r.hostname}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 mono">${r.event_type}</span></td>
+                    <td class="px-4 py-3 mono text-rose-400">${r.source_ip}</td>
+                    <td class="px-4 py-3 mono text-slate-300">${r.raw_payload}</td>
+                    <td class="px-4 py-3 mono text-slate-500">${r.short_hash}...</td>
+                </tr>
+            `).join('');
+
+            // Custody Audit Table
+            document.getElementById('auditBody').innerHTML = data.audits.map(a => `
+                <tr class="hover:bg-slate-800/40">
+                    <td class="px-3 py-2 mono text-slate-400">#${a.audit_id}</td>
+                    <td class="px-3 py-2 mono text-cyan-300">Log #${a.log_id}</td>
+                    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 mono">${a.action_type}</span></td>
+                    <td class="px-3 py-2 mono text-slate-300">${a.performed_by}</td>
+                    <td class="px-3 py-2 mono text-slate-400">${a.action_timestamp}</td>
+                </tr>
+            `).join('');
+
+            // EXPLAIN Table
+            document.getElementById('explainBody').innerHTML = data.explain.map(e => `
+                <tr>
+                    <td class="px-3 py-2 text-white">${e.table}</td>
+                    <td class="px-3 py-2 text-amber-400">${e.type}</td>
+                    <td class="px-3 py-2 text-slate-300">${e.possible_keys}</td>
+                    <td class="px-3 py-2 text-emerald-400 font-bold">${e.key}</td>
+                    <td class="px-3 py-2 text-cyan-300">${e.rows}</td>
+                    <td class="px-3 py-2 text-slate-400">${e.Extra}</td>
+                </tr>
+            `).join('');
+
+            // Charts
+            const eventCounts = {};
+            data.timeline.forEach(r => eventCounts[r.event_type] = (eventCounts[r.event_type] || 0) + 1);
+            if (eventChartInstance) eventChartInstance.destroy();
+            eventChartInstance = new Chart(document.getElementById('eventChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(eventCounts),
+                    datasets: [{ data: Object.values(eventCounts), backgroundColor: ['#06b6d4', '#f43f5e', '#f59e0b', '#10b981'], borderWidth: 0 }]
+                },
+                options: { plugins: { legend: { position: 'right', labels: { color: '#cbd5e1', font: { size: 11 } } } } }
+            });
+
+            if (workloadChartInstance) workloadChartInstance.destroy();
+            workloadChartInstance = new Chart(document.getElementById('workloadChart'), {
+                type: 'bar',
+                data: {
+                    labels: data.workload.map(w => w.full_name),
+                    datasets: [
+                        { label: 'Total Cases', data: data.workload.map(w => w.total_cases), backgroundColor: '#06b6d4', borderRadius: 6 },
+                        { label: 'Critical Cases', data: data.workload.map(w => w.critical_cases), backgroundColor: '#f43f5e', borderRadius: 6 }
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+                        y: { ticks: { color: '#94a3b8', stepSize: 1 }, grid: { color: '#1e293b' } }
+                    },
+                    plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 11 } } } }
+                }
+            });
+        }
+
+        async function ingestLog() {
+            const payload = {
+                host_id: parseInt(document.getElementById('hostSelect').value),
+                event_type: document.getElementById('eventType').value,
+                source_ip: document.getElementById('sourceIp').value,
+                raw_payload: document.getElementById('rawPayload').value,
+                role: document.getElementById('rbacRole').value
+            };
+            const res = await fetch('/api/logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (!res.ok) return showToast(`MySQL Error: ${data.detail}`, true);
+            showToast(data.message);
+            loadDashboard();
+        }
+
+        async function testTamper() {
+            const payload = {
+                log_id: parseInt(document.getElementById('tamperLogId').value),
+                fake_payload: document.getElementById('fakePayload').value,
+                role: document.getElementById('rbacRole').value
+            };
+            const res = await fetch('/api/tamper', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (!res.ok) return showToast(`BLOCKED BY MYSQL: ${data.detail}`, true);
+            showToast(data.message);
+        }
+
+        async function closeIncident() {
+            const payload = {
+                incident_id: parseInt(document.getElementById('closeIncId').value),
+                role: document.getElementById('rbacRole').value
+            };
+            const res = await fetch('/api/close-incident', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (!res.ok) return showToast(`BLOCKED BY MYSQL: ${data.detail}`, true);
+            showToast(data.message);
+            loadDashboard();
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

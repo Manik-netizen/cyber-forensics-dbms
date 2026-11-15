@@ -2,19 +2,11 @@ from datetime import datetime
 import hashlib
 import os
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 import mysql.connector
 from pydantic import BaseModel
 
 app = FastAPI(title="Cyber Forensics DBMS")
 
-# # Resolve static directory path reliably for both local and Vercel serverless environments
-# BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# STATIC_DIR = os.path.join(BASE_DIR, "static")
-# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_db():
   return mysql.connector.connect(
@@ -45,14 +37,6 @@ class CloseIncidentRequest(BaseModel):
   incident_id: int
   role: str = "root"
 
-
-@app.get("/")
-@app.get("/api/index")
-def serve_ui():
-  with open(
-      os.path.join(CURRENT_DIR, "index.html"), "r", encoding="utf-8"
-  ) as f:
-    return f.read()
 
 @app.get("/api/dashboard")
 def get_dashboard_data(incident_id: int = 1):
